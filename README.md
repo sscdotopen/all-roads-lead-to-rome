@@ -43,7 +43,7 @@ As we computed the ranks now, we can use them to measure convergence for failure
       hdfs:///experiments/pagerank/webbase/verticesWithRanks/ 
 
 
-After that, we can run PageRank from the *ssc*-branch and simulate failures by supplying different values for the *<failingWorkers>*,  *<failingIteration>*, and *<messageLoss>* parameters:
+After that, we can run PageRank from the *ssc*-branch and simulate failures by supplying different values for the *<failingWorkers>*,  *<failingIteration>* parameters:
 
     java -cp ".:./pact-runtime-0.2.jar:<stratosphere-dir>/lib/nephele-common-0.2.jar:<stratosphere-dir>/lib/pact-common-0.2.jar:
       <stratosphere-dir>/lib/commons-logging-1.1.1.jar:<stratosphere-dir>/lib/log4j-1.4.16.jar:<stratosphere-dir>/lib/guava-r09.jar:
@@ -51,6 +51,60 @@ After that, we can run PageRank from the *ssc*-branch and simulate failures by s
       eu.stratosphere.pact.runtime.iterative.compensatable.danglingpagerank.CompensatableDanglingPageRank 
       <numWorkers> <tasksPerWorker> hdfs:///experiments/pagerank/webbase/vertices/ hdfs:///experiments/pagerank/webbase/adjacency/ 
       hdfs:///results/pagerank/webbase/verticesWithRanks/ <stratosphere-dir>/conf/ 256 256 512 60 115657290 25174808 
-      <failingWorkers> <failingIteration> <messageLoss> <checkpointLocation>
+      <failingWorkers> <failingIteration> 0.5 <checkpointLocation>
+
+Grep for *IterationHeadPactTask* and *head received global aggregate* in the log files to obtain statistics about the convergence
+
+
+### ConnectedComponents on the Twitter graph
+
+Again, we start with unpacking the dataset and preparing it via jobs from the *dogfood*-repository:
+
+    bin/pact-client.sh run -j dogfood-1.0-EdgeListToAdjacencyList.jar 
+      -w -a <numWorkers> hdfs:///experiments/twitter-icwsm2010/links-anon.txt 
+      hdfs:///experiments/connectedcomponents/twitter-icwsm/adjacency/ true
+
+    bin/pact-client.sh run -j dogfood-1.0-Uniquify.jar
+      -w -a <numWorkers> hdfs:///experiments/twitter-icwsm2010/links-anon.txt 
+      hdfs:///experiments/connectedcomponents/twitter-icwsm/vertices/
+
+    bin/pact-client.sh run -j dogfood-1.0-Symmetrify.jar 
+      -w -a <numWorkers> hdfs:///experiments/twitter-icwsm2010/links-anon.txt 
+      hdfs:///experiments/connectedcomponents/twitter-icwsm/initialWorkset/
+
+
+We use the connected components implementation from the *ssc*-branch to measure the performance with and without checkpointing:
+
+    java -cp ".:<stratosphere-dir>/lib/nephele-common-0.2.jar:<stratosphere-dir>/lib/pact-common-0.2.jar:
+      <stratosphere-dir>/lib/commons-logging-1.1.1.jar:<stratosphere-dir>/lib/log4j-1.4.16.jar:<stratosphere-dir>/lib/guava-r09.jar:
+      <stratosphere-dir>/lib/commons-codec-1.3.jar" 
+      eu.stratosphere.pact.runtime.iterative.compensatable.connectedcomponents.CompensatableConnectedComponents 
+      <numWorkers> <tasksPerWorker> hdfs:///experiments/connectedcomponents/twitter-icwsm/vertices/
+      hdfs:///experiments/connectedcomponents/twitter-icwsm/initialWorkset/
+       hdfs:///experiments/connectedcomponents/twitter-icwsm/adjacency/ hdfs:///output-cc/ <stratosphere-dir>/conf/ 
+      2048 1536 1024 0 1000 0
+
+    java -cp ".:<stratosphere-dir>/lib/nephele-common-0.2.jar:<stratosphere-dir>/lib/pact-common-0.2.jar:
+      <stratosphere-dir>/lib/commons-logging-1.1.1.jar:<stratosphere-dir>/lib/log4j-1.4.16.jar:<stratosphere-dir>/lib/guava-r09.jar:
+      <stratosphere-dir>/lib/commons-codec-1.3.jar" 
+      eu.stratosphere.pact.runtime.iterative.compensatable.connectedcomponents.CompensatableConnectedComponents 
+      <numWorkers> <tasksPerWorker> hdfs:///experiments/connectedcomponents/twitter-icwsm/vertices/
+      hdfs:///experiments/connectedcomponents/twitter-icwsm/initialWorkset/
+       hdfs:///experiments/connectedcomponents/twitter-icwsm/adjacency/ hdfs:///output-cc/ <stratosphere-dir>/conf/ 
+      2048 1536 1024 0 1000 0 <checkpointLocation>
+
+Again, grepping for *IterationSynchronizationSinkTask* and *finishing iteration* in the log files gives the runtimes for individual iterations. 
+
+    
+After that we can again simulate failures by supplying different values for the *<failingWorkers>*,  *<failingIteration>* parameters:
+
+    java -cp ".:<stratosphere-dir>/lib/nephele-common-0.2.jar:<stratosphere-dir>/lib/pact-common-0.2.jar:
+      <stratosphere-dir>/lib/commons-logging-1.1.1.jar:<stratosphere-dir>/lib/log4j-1.4.16.jar:<stratosphere-dir>/lib/guava-r09.jar:
+      <stratosphere-dir>/lib/commons-codec-1.3.jar" 
+      eu.stratosphere.pact.runtime.iterative.compensatable.connectedcomponents.CompensatableConnectedComponents 
+      <numWorkers> <tasksPerWorker> hdfs:///experiments/connectedcomponents/twitter-icwsm/vertices/
+      hdfs:///experiments/connectedcomponents/twitter-icwsm/initialWorkset/
+       hdfs:///experiments/connectedcomponents/twitter-icwsm/adjacency/ hdfs:///output-cc/ <stratosphere-dir>/conf/ 
+      2048 1536 1024 <failingWorkers> <failingIteration> 0.5 
 
 Grep for *IterationHeadPactTask* and *head received global aggregate* in the log files to obtain statistics about the convergence
